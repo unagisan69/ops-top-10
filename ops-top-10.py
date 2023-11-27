@@ -3,19 +3,29 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
+import shutil
 
-# Watch folder
-save_directory = '/your/watch/dir'
+# Directory to save files
+save_directory = '/your/watch/folder'
 os.makedirs(save_directory, exist_ok=True)
 
+# Temporary directory within the save directory
+temp_directory = os.path.join(save_directory, 'temp')
+os.makedirs(temp_directory, exist_ok=True)
+
 # Session cookie
-cookie = {'session': 'pasteyourcookiehere'}
+cookie = {'session': 'pasteyourcookieherelQ9OdGkfOs9pyvMC0jfQgs%3D'}
 
 # Target URL
 url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day'
 
+# Headers to mimic browser
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+}
+
 # Send GET request
-response = requests.get(url, cookies=cookie)
+response = requests.get(url, cookies=cookie, headers=headers)
 
 # Check if the request was successful
 if response.status_code == 200:
@@ -28,29 +38,36 @@ if response.status_code == 200:
     # Download and save each file
     for link in dl_links:
         file_url = 'https://orpheus.network/' + link
-        file_response = requests.get(file_url, cookies=cookie, stream=True)
+        file_response = requests.get(file_url, cookies=cookie, headers=headers, allow_redirects=True, stream=True)
 
         # Check if the file download request was successful
         if file_response.status_code == 200:
             # Determine file name from Content-Disposition header or URL
             content_disposition = file_response.headers.get('content-disposition')
             if content_disposition:
-                filename = re.findall("filename=(.+)", content_disposition)[0].strip('"')
+                filename = re.findall("filename=\"?([^\";]+)\"?", content_disposition)[0]
             else:
                 filename = link.split('/')[-1]
 
-            file_path = os.path.join(save_directory, filename)
+            temp_file_path = os.path.join(temp_directory, filename)
+            final_file_path = os.path.join(save_directory, filename)
 
-            # Check if file already exists
-            if not os.path.exists(file_path):
-                with open(file_path, 'wb') as file:
-                    for chunk in file_response.iter_content(chunk_size=128):
-                        file.write(chunk)
-                print(f"File saved: {file_path}")
+            with open(temp_file_path, 'wb') as file:
+                for chunk in file_response.iter_content(chunk_size=128):
+                    file.write(chunk)
+
+            # Move file if it does not exist in the save directory
+            if not os.path.exists(final_file_path):
+                shutil.move(temp_file_path, final_file_path)
+                print(f"File moved to save directory: {final_file_path}")
             else:
-                print(f"File already exists: {file_path}")
+                print(f"File already exists, skipped: {final_file_path}")
         else:
             print(f"Failed to download file from {file_url}")
+
+    # Delete the temp directory after processing all files
+    shutil.rmtree(temp_directory)
+    print(f"Temporary directory deleted: {temp_directory}")
 
 else:
     print("Failed to retrieve data. Status code:", response.status_code)
