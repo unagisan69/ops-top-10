@@ -4,9 +4,15 @@ from bs4 import BeautifulSoup
 import os
 import re
 import shutil
+import argparse
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Download files from Orpheus network.')
+parser.add_argument('-l', '--list', action='store_true', help='Use alternative URL and get the first 10 DL links')
+args = parser.parse_args()
 
 # Directory to save files
-save_directory = '/your/watch/folder'
+save_directory = '/home/user/watch/rtorrent'
 os.makedirs(save_directory, exist_ok=True)
 
 # Temporary directory within the save directory
@@ -14,10 +20,10 @@ temp_directory = os.path.join(save_directory, 'temp')
 os.makedirs(temp_directory, exist_ok=True)
 
 # Session cookie
-cookie = {'session': 'pasteyourcookieherelQ9OdGkfOs9pyvMC0jfQgs%3D'}
+cookie = {'session': 'yourseedhere'}
 
 # Target URL
-url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day'
+url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day' if not args.list else 'https://orpheus.network/top10.php'
 
 # Headers to mimic browser
 headers = {
@@ -34,6 +40,10 @@ if response.status_code == 200:
 
     # Find all links with anchor text 'DL'
     dl_links = [link['href'] for link in soup.find_all('a', string='DL')]
+
+    # If -l flag is used, limit to first 10 links
+    if args.list:
+        dl_links = dl_links[:10]
 
     # Download and save each file
     for link in dl_links:
