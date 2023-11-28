@@ -3,6 +3,8 @@ Snatch the current Top 10 from OPS to your watch folder. Checks to ensure the .t
 ## Usage
 ./ops-top-10.py
 
+use the argument -f to use your current freeleech tokens
+
 use the argument -l to use https://orpheus.network/top10.php rather than https://orpheus.network/top10.php?type=torrents&limit=10&details=day
 
 ## Installation
