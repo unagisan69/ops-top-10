@@ -9,6 +9,7 @@ import argparse
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Download files from Orpheus network.')
 parser.add_argument('-l', '--list', action='store_true', help='Use alternative URL and get the first 10 DL links')
+parser.add_argument('-f', '--freeleech', action='store_true', help='Check for available Freeleech tokens')
 args = parser.parse_args()
 
 # Directory to save files
@@ -41,7 +42,7 @@ def get_user_id():
 # Function to get downloaded torrent IDs
 def get_downloaded_torrent_ids(user_id):
     downloaded_ids = set()
-    for page in range(1, 6):  # Loop through pages 1 to 5
+    for page in range(1, 6):
         torrentid_url = f'https://orpheus.network/torrents.php?type=downloaded&userid={user_id}&page={page}'
         response = requests.get(torrentid_url, cookies=cookie, headers=headers)
 
@@ -56,9 +57,46 @@ def get_downloaded_torrent_ids(user_id):
                         torrentid = re.search('torrentid=(\d+)', link['href']).group(1)
                         downloaded_ids.add(torrentid)
         else:
-            break  # Exit the loop if a page fails to load
+            break
 
     return downloaded_ids
+
+# Function to check Freeleech tokens
+def check_freeleech_tokens():
+    url = 'https://orpheus.network/index.php'
+    response = requests.get(url, cookies=cookie, headers=headers)
+
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        fl_token_tag = soup.find('li', id='fl_tokens')
+
+        if fl_token_tag:
+            stat_span = fl_token_tag.find('span', class_='stat')
+            if stat_span and stat_span.find('a'):
+                token_value = stat_span.find('a').get_text()
+                try:
+                    token_value = int(token_value)
+                    return token_value
+                except ValueError:
+                    pass
+
+        return 0
+    else:
+        return -1
+
+# Check Freeleech tokens if -f flag is used
+use_token = False
+if args.freeleech:
+    token_count = check_freeleech_tokens()
+    if token_count == -1:
+        print("Failed to retrieve webpage for Freeleech tokens")
+        exit()
+    elif token_count >= 1:
+        print(f"Remaining Tokens: {token_count}")
+        use_token = True
+    else:
+        print("No Freeleech Tokens Available")
+        exit()
 
 # Retrieve user ID
 user_id = get_user_id()
@@ -77,17 +115,12 @@ response = requests.get(url, cookies=cookie, headers=headers)
 
 # Check if the request was successful
 if response.status_code == 200:
-    # Parse HTML content
     soup = BeautifulSoup(response.content, 'html.parser')
-
-    # Find all links with anchor text 'DL'
     dl_links = [link['href'] for link in soup.find_all('a', string='DL')]
 
-    # If -l flag is used, limit to first 10 links
     if args.list:
         dl_links = dl_links[:10]
 
-    # Download and save each file
     for link in dl_links:
         torrent_id = re.search('id=(\d+)', link).group(1)
         if torrent_id in downloaded_torrent_ids:
@@ -95,11 +128,12 @@ if response.status_code == 200:
             continue
 
         file_url = 'https://orpheus.network/' + link
+        if use_token:
+            file_url += '&usetoken=1'
+
         file_response = requests.get(file_url, cookies=cookie, headers=headers, allow_redirects=True, stream=True)
 
-        # Check if the file download request was successful
         if file_response.status_code == 200:
-            # Determine file name from Content-Disposition header or URL
             content_disposition = file_response.headers.get('content-disposition')
             if content_disposition:
                 filename = re.findall("filename=\"?([^\";]+)\"?", content_disposition)[0]
@@ -113,7 +147,6 @@ if response.status_code == 200:
                 for chunk in file_response.iter_content(chunk_size=128):
                     file.write(chunk)
 
-            # Move file if it does not exist in the save directory
             if not os.path.exists(final_file_path):
                 shutil.move(temp_file_path, final_file_path)
                 print(f"File moved to save directory: {final_file_path}")
@@ -122,7 +155,6 @@ if response.status_code == 200:
         else:
             print(f"Failed to download file from {file_url}")
 
-    # Delete the temp directory after processing all files
     shutil.rmtree(temp_directory)
     print(f"Temporary directory deleted: {temp_directory}")
 
