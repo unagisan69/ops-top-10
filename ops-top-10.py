@@ -5,12 +5,10 @@ import os
 import re
 import shutil
 import argparse
-import subprocess
 
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Download files from Orpheus network and run RED_OPS_Better.')
-parser.add_argument('-l', '--latest', action='store_true', help='Use alternative URL and get the first 10 DL links')
-parser.add_argument('-b', '--better', action='store_true', help='Run RED_OPS_Better after downloading')
+parser = argparse.ArgumentParser(description='Download files from Orpheus network.')
+parser.add_argument('-l', '--list', action='store_true', help='Use alternative URL and get the first 10 DL links')
 args = parser.parse_args()
 
 # Directory to save files
@@ -22,15 +20,57 @@ temp_directory = os.path.join(save_directory, 'temp')
 os.makedirs(temp_directory, exist_ok=True)
 
 # Session cookie
-cookie = {'session': 'pasteyourcookiehereQ9OdGkfOs9pyvMC0jfQgs%3D'}
-
-# Target URL
-url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day' if not args.list else 'https://orpheus.network/top10.php'
+cookie = {'session': 'cookiepastedhere'}
 
 # Headers to mimic browser
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
 }
+
+# Function to get user ID
+def get_user_id():
+    url = 'https://orpheus.network/index.php'
+    response = requests.get(url, cookies=cookie, headers=headers)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        user_link = soup.find('a', class_='username')
+        if user_link and 'id=' in user_link['href']:
+            return re.search('id=(\d+)', user_link['href']).group(1)
+    return None
+
+# Function to get downloaded torrent IDs
+def get_downloaded_torrent_ids(user_id):
+    downloaded_ids = set()
+    for page in range(1, 6):  # Loop through pages 1 to 5
+        torrentid_url = f'https://orpheus.network/torrents.php?type=downloaded&userid={user_id}&page={page}'
+        response = requests.get(torrentid_url, cookies=cookie, headers=headers)
+
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            group_infos = soup.find_all('div', class_='group_info')
+
+            for group in group_infos:
+                links = group.find_all('a', href=True)
+                for link in links:
+                    if 'torrentid=' in link['href']:
+                        torrentid = re.search('torrentid=(\d+)', link['href']).group(1)
+                        downloaded_ids.add(torrentid)
+        else:
+            break  # Exit the loop if a page fails to load
+
+    return downloaded_ids
+
+# Retrieve user ID
+user_id = get_user_id()
+if user_id is None:
+    print("Failed to retrieve user ID. Check session cookie or network.")
+    exit()
+
+# Get downloaded torrent IDs
+downloaded_torrent_ids = get_downloaded_torrent_ids(user_id)
+
+# Target URL
+url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day' if not args.list else 'https://orpheus.network/top10.php'
 
 # Send GET request
 response = requests.get(url, cookies=cookie, headers=headers)
@@ -49,6 +89,11 @@ if response.status_code == 200:
 
     # Download and save each file
     for link in dl_links:
+        torrent_id = re.search('id=(\d+)', link).group(1)
+        if torrent_id in downloaded_torrent_ids:
+            print(f"Torrent ID {torrent_id} already downloaded, skipping...")
+            continue
+
         file_url = 'https://orpheus.network/' + link
         file_response = requests.get(file_url, cookies=cookie, headers=headers, allow_redirects=True, stream=True)
 
@@ -80,13 +125,6 @@ if response.status_code == 200:
     # Delete the temp directory after processing all files
     shutil.rmtree(temp_directory)
     print(f"Temporary directory deleted: {temp_directory}")
-
-    # If -b flag is used, execute RED_OPS_Better
-    if args.better:
-        red_ops_better_dir = '/path/to/RED_OPS_Better-main'
-        os.chdir(red_ops_better_dir)
-        subprocess.run(['./red_ops_better', '-T', 'OPS'])
-        print("RED_OPS_Better executed.")
 
 else:
     print("Failed to retrieve data. Status code:", response.status_code)
