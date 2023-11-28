@@ -5,10 +5,12 @@ import os
 import re
 import shutil
 import argparse
+import subprocess
 
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Download files from Orpheus network.')
-parser.add_argument('-l', '--list', action='store_true', help='Use alternative URL and get the first 10 DL links')
+parser = argparse.ArgumentParser(description='Download files from Orpheus network and run RED_OPS_Better.')
+parser.add_argument('-l', '--latest', action='store_true', help='Use alternative URL and get the first 10 DL links')
+parser.add_argument('-b', '--better', action='store_true', help='Run RED_OPS_Better after downloading')
 args = parser.parse_args()
 
 # Directory to save files
@@ -20,7 +22,7 @@ temp_directory = os.path.join(save_directory, 'temp')
 os.makedirs(temp_directory, exist_ok=True)
 
 # Session cookie
-cookie = {'session': 'yourseedhere'}
+cookie = {'session': 'pasteyourcookiehereQ9OdGkfOs9pyvMC0jfQgs%3D'}
 
 # Target URL
 url = 'https://orpheus.network/top10.php?type=torrents&limit=10&details=day' if not args.list else 'https://orpheus.network/top10.php'
@@ -78,6 +80,13 @@ if response.status_code == 200:
     # Delete the temp directory after processing all files
     shutil.rmtree(temp_directory)
     print(f"Temporary directory deleted: {temp_directory}")
+
+    # If -b flag is used, execute RED_OPS_Better
+    if args.better:
+        red_ops_better_dir = '/path/to/RED_OPS_Better-main'
+        os.chdir(red_ops_better_dir)
+        subprocess.run(['./red_ops_better', '-T', 'OPS'])
+        print("RED_OPS_Better executed.")
 
 else:
     print("Failed to retrieve data. Status code:", response.status_code)
